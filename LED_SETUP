@@ -1,0 +1,83 @@
+#include <Adafruit_NeoPixel.h>
+
+// Define pins
+const int tempSensorPin = A0; // Analog pin for temperature sensor
+const int buttonPin = 2;      // Button pin for starting study timer
+const int ledPin = 6;         // Data pin for WS2812B LED strip
+
+// LED setup
+#define NUM_LEDS 24           // Number of LEDs in the strip
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, ledPin, NEO_GRB + NEO_KHZ800);
+
+// Variables
+bool studySessionActive = false;
+unsigned long studyStartTime = 0;
+unsigned long postureReminderTime = 0;
+const int idealTempLow = 22; // Example ideal temp range, adjust as needed
+const int idealTempHigh = 25;
+
+void setup() {
+  // Initialize pins
+  pinMode(buttonPin, INPUT_PULLUP);
+  
+  // Initialize serial monitor
+  Serial.begin(9600);
+  
+  // Initialize the LED strip
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+}
+
+void loop() {
+  // Read temperature
+  int tempValue = analogRead(tempSensorPin);
+  float temperatureC = (tempValue * (5.0 / 1024.0)) * 100;
+
+  // Temperature Check
+  if (temperatureC < idealTempLow) {
+    setColor(strip.Color(0, 0, 255)); // Blue for too cold
+  } else if (temperatureC > idealTempHigh) {
+    setColor(strip.Color(255, 0, 0)); // Red for too hot
+  } else {
+    setColor(strip.Color(0, 255, 0)); // Green for ideal temperature
+  }
+
+  // Start study session when button is pressed
+  if (digitalRead(buttonPin) == LOW) {
+    studySessionActive = true;
+    studyStartTime = millis();
+    postureReminderTime = millis();
+    Serial.println("Study session started!");
+    delay(200); // Debounce delay
+  }
+
+  // Study session active
+  if (studySessionActive) {
+    unsigned long elapsedTime = millis() - studyStartTime;
+    unsigned long postureElapsed = millis() - postureReminderTime;
+
+    // End study session after 25 minutes
+    if (elapsedTime >= 1500000) { // 25 minutes = 1500000 ms
+      studySessionActive = false;
+      Serial.println("Study session ended! Take a break.");
+      setColor(strip.Color(0, 0, 0)); // Turn off LEDs
+    }
+
+    // Posture reminder every 30 minutes
+    if (postureElapsed >= 1800000) { // 30 minutes = 1800000 ms
+      setColor(strip.Color(255, 255, 0)); // Yellow for posture reminder
+      Serial.println("Adjust your posture!");
+      delay(5000); // Flash yellow for 5 seconds
+      setColor(strip.Color(0, 255, 0)); // Back to ideal color if within range
+      postureReminderTime = millis(); // Reset posture timer
+    }
+  }
+}
+
+// Function to set color for the entire strip
+void setColor(uint32_t color) {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
+}
